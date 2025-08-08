@@ -44,8 +44,6 @@ fps_limiter = subprocess.Popen(
 )
 P_PID1 = fps_limiter.pid
 
-time.sleep(1)
-
 # fps-monitor 開始
 fps_monitor = subprocess.Popen(
     ["sudo", "./fps_monitor.py", str(APP_PID2)]
