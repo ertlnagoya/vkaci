@@ -54,25 +54,34 @@ def create_bpf_for_monitoring():
     #print(bpf_text)
     return BPF(text=bpf_text, usdt_contexts=usdt_contexts)
 
-process_pid = sys.argv[1]
-fps_limit = int(sys.argv[2])
+def main(args) -> None:
+    global fps_limit
+    global pid_app_high
 
-add_monitored_process(int(process_pid))
-pid_app_high = process_pid
+    process_pid = args[0]
+    fps_limit = int(args[1])
 
-bpf = create_bpf_for_monitoring()
+    add_monitored_process(int(process_pid))
+    pid_app_high = process_pid
 
-print("BCC Log:", flush=True)
+    bpf = create_bpf_for_monitoring()
 
-# process event
-def print_event(cpu, data, size):
-    event = bpf['log_entries'].event(data)
-    print(event.message, event.pid, event.fps)
+    print("BCC Log:", flush=True)
 
-# loop with callback to print_event
-bpf["log_entries"].open_perf_buffer(print_event)
-while 1:
-    try:
-        bpf.perf_buffer_poll()
-    except KeyboardInterrupt:
-        exit()
+    # process event
+    def print_event(cpu, data, size):
+        event = bpf['log_entries'].event(data)
+        print(event.message, event.pid, event.fps)
+        with open("limiter.txt", "a", encoding="utf-8") as f:
+            f.write(f"{event.message} {event.pid} {event.fps}\n")
+
+    # loop with callback to print_event
+    bpf["log_entries"].open_perf_buffer(print_event)
+    while 1:
+        try:
+            bpf.perf_buffer_poll()
+        except KeyboardInterrupt:
+            exit()
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

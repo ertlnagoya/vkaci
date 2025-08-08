@@ -4,6 +4,9 @@ import os
 import sys
 import time
 
+from multiprocessing import shared_memory
+import struct
+
 binary_to_usdt_dict = {}
 binary_to_probes_dict = {}
 probe_to_binary_dict = {}
@@ -51,24 +54,35 @@ def create_bpf_for_monitoring():
     #print(bpf_text)
     return BPF(text=bpf_text, usdt_contexts=usdt_contexts)
 
-process_pid = sys.argv[1]
+def main(args) -> None:
+    global fps_limit
+    global pid_app_high
+    process_pid = args[0]
 
-add_monitored_process(int(process_pid))
-pid_app_high = process_pid
+    add_monitored_process(int(process_pid))
+    pid_app_high = process_pid
 
-bpf = create_bpf_for_monitoring()
+    bpf = create_bpf_for_monitoring()
 
-print("BCC Log:", flush=True)
+    print("BCC Log:", flush=True)
 
-# process event
-def print_event(cpu, data, size):
-    event = bpf['log_entries'].event(data)
-    print(event.message, event.pid, event.fps)
+    # process event
+    def print_event(cpu, data, size):
+        event = bpf['log_entries'].event(data)
+        print(event.message, event.pid, event.fps)
+        with open("monitor.txt", "a", encoding="utf-8") as f:
+            f.write(f"{event.message} {event.pid} {event.fps}\n")
+        shm = shared_memory.SharedMemory(name="fps_shm")
+        shm.buf[:4] = struct.pack("i", event.fps)
+        shm.close()
 
-# loop with callback to print_event
-bpf["log_entries"].open_perf_buffer(print_event)
-while 1:
-    try:
-        bpf.perf_buffer_poll()
-    except KeyboardInterrupt:
-        exit()
+    # loop with callback to print_event
+    bpf["log_entries"].open_perf_buffer(print_event)
+    while 1:
+        try:
+            bpf.perf_buffer_poll()
+        except KeyboardInterrupt:
+            exit()
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

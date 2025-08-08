@@ -5,7 +5,7 @@ echo vkmark1 is started with pid [$APP_PID].
 
 sleep 1
 
-sudo ./fps-monitor.py $APP_PID &
+sudo ./fps_monitor.py $APP_PID &
 
 P_PID=$!
 

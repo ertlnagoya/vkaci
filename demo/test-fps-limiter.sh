@@ -5,7 +5,7 @@ echo vkmark1 is started with pid [$APP_PID1].
 
 sleep 1
 
-sudo ./fps-monitor.py $APP_PID1 &
+sudo ./fps_monitor.py $APP_PID1 &
 
 P_PID1=$!
 
@@ -17,13 +17,13 @@ DISPLAY=:0 LD_PRELOAD=$PWD/../build/intercept.so vkmark -b vertex:duration=10 -s
 APP_PID2=$!
 echo vkmark2 is started with pid [$APP_PID2].
 
-sudo ./fps-limiter.py $APP_PID1 30 &
+sudo ./fps_limiter.py $APP_PID1 30 &
 
 P_PID1=$!
 
 sleep 1
 
-sudo ./fps-monitor.py $APP_PID2 &
+sudo ./fps_monitor.py $APP_PID2 &
 
 P_PID2=$!
 
