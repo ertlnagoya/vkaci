@@ -1,8 +1,6 @@
 #!/usr/bin/python3
 from bcc import BPF, USDT
-import os
 import sys
-import time
 
 from multiprocessing import shared_memory
 import struct
@@ -23,8 +21,6 @@ def add_monitored_process(pid: int):
 def create_bpf_for_monitoring():
     usdt_contexts = []
     bpf_text = f"""
-        #define TARGET_FRAME_TIME_US ({1000*1000//fps_limit}U)
-
         struct log_entry {{
             u32  pid;
             u32  fps;

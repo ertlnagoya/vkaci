@@ -2,6 +2,12 @@
 from bcc import BPF, USDT
 import sys
 
+from multiprocessing import shared_memory
+import struct
+from typing import cast
+from bcc.table import HashTable
+import ctypes as ct
+
 binary_to_usdt_dict = {}
 binary_to_probes_dict = {}
 probe_to_binary_dict = {}
@@ -18,7 +24,7 @@ def add_monitored_process(pid: int):
 def create_bpf_for_monitoring():
     usdt_contexts = []
     bpf_text = f"""
-        #define TARGET_FRAME_TIME_US ({1000*1000//fps_limit}U)
+        BPF_HASH(frame_time_us, u32, u32);
 
         struct log_entry {{
             u32  pid;
@@ -30,10 +36,16 @@ def create_bpf_for_monitoring():
         int test_on_fps_update_limiter(struct pt_regs *ctx) {{
             uint32_t fps;
             void *p_frame_tims_us;
-            uint32_t frame_tims_us = TARGET_FRAME_TIME_US;
+
             bpf_usdt_readarg(1, ctx, &fps);
             bpf_usdt_readarg(2, ctx, &p_frame_tims_us);
-            bpf_probe_write_user(p_frame_tims_us, &frame_tims_us, sizeof(frame_tims_us));
+
+            u32 key = 0;
+            u32 *frame_time_ptr = frame_time_us.lookup(&key);
+            if (frame_time_ptr) {{
+                bpf_probe_write_user(p_frame_tims_us, frame_time_ptr, sizeof(*frame_time_ptr));
+            }}
+
             struct log_entry entry = {{ .message = "test_on_fps_update_limiter", .pid = bpf_get_current_pid_tgid() }};
             entry.fps = fps;
             log_entries.perf_submit(ctx, &entry, sizeof(entry));
@@ -55,8 +67,7 @@ def create_bpf_for_monitoring():
     return BPF(text=bpf_text, usdt_contexts=usdt_contexts)
 
 def main(args) -> None:
-    global fps_limit
-    global pid_app_high
+    global fps_limit, pid_app_high
 
     process_pid = args[0]
     fps_limit = int(args[1])
@@ -65,15 +76,22 @@ def main(args) -> None:
     pid_app_high = process_pid
 
     bpf = create_bpf_for_monitoring()
+    frame_time_us = cast(HashTable, bpf.get_table("frame_time_us"))
+    frame_time_us[ct.c_uint(0)] = ct.c_uint(1000*1000//fps_limit)
 
     print("BCC Log:", flush=True)
 
     # process event
     def print_event(cpu, data, size):
+        global fps_limit
         event = bpf['log_entries'].event(data)
         print(event.message, event.pid, event.fps)
         with open("limiter.txt", "a", encoding="utf-8") as f:
             f.write(f"{event.message} {event.pid} {event.fps}\n")
+        shm = shared_memory.SharedMemory(name="limited_fps_shm")
+        fps_limit = struct.unpack("i", shm.buf[:4])[0]
+        frame_time_us[ct.c_uint(0)] = ct.c_uint(1000*1000//fps_limit)
+        shm.close()
 
     # loop with callback to print_event
     bpf["log_entries"].open_perf_buffer(print_event)
