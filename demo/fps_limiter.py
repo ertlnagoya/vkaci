@@ -7,6 +7,8 @@ import struct
 from typing import cast
 from bcc.table import HashTable
 import ctypes as ct
+import threading
+import time
 
 binary_to_usdt_dict = {}
 binary_to_probes_dict = {}
@@ -79,19 +81,25 @@ def main(args) -> None:
     frame_time_us = cast(HashTable, bpf.get_table("frame_time_us"))
     frame_time_us[ct.c_uint(0)] = ct.c_uint(1000*1000//fps_limit)
 
-    print("BCC Log:", flush=True)
-
     # process event
     def print_event(cpu, data, size):
         global fps_limit
         event = bpf['log_entries'].event(data)
-        print(event.message, event.pid, event.fps)
+        # print(event.message, event.pid, event.fps)
         with open("limiter.txt", "a", encoding="utf-8") as f:
-            f.write(f"{event.message} {event.pid} {event.fps}\n")
-        shm = shared_memory.SharedMemory(name="limited_fps_shm")
-        fps_limit = struct.unpack("i", shm.buf[:4])[0]
-        frame_time_us[ct.c_uint(0)] = ct.c_uint(1000*1000//fps_limit)
-        shm.close()
+            f.write(f"{event.fps}\n")
+    def fps_limit_update():
+        while (True):
+            shm = shared_memory.SharedMemory(name="limited_fps_shm")
+            fps_limit = struct.unpack("i", shm.buf[:4])[0]
+            if fps_limit != -1:
+                shm.buf[:4] = struct.pack("i", -1)
+                frame_time_us[ct.c_uint(0)] = ct.c_uint(1000*1000//fps_limit)
+                shm.close()
+            time.sleep(0.2)
+
+    t = threading.Thread(target=fps_limit_update, daemon=True)
+    t.start()
 
     # loop with callback to print_event
     bpf["log_entries"].open_perf_buffer(print_event)

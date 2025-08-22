@@ -1,29 +1,29 @@
-Monitoring start.
-b'test_on_fps_update' 8511 91
-b'test_on_fps_update' 8511 97
-b'test_on_fps_update' 8511 95
-b'test_on_fps_update' 8511 102
-b'test_on_fps_update' 8511 110
-b'test_on_fps_update' 8511 110
-b'test_on_fps_update' 8511 107
-b'test_on_fps_update' 8511 106
-b'test_on_fps_update' 8511 105
-b'test_on_fps_update' 8511 105
-b'test_on_fps_update' 8511 105
-b'test_on_fps_update' 8511 102
-b'test_on_fps_update' 8511 106
-b'test_on_fps_update' 8511 109
-b'test_on_fps_update' 8511 112
-b'test_on_fps_update' 8511 113
-b'test_on_fps_update' 8511 106
-b'test_on_fps_update' 8511 99
-b'test_on_fps_update' 8511 102
-b'test_on_fps_update' 8511 101
-b'test_on_fps_update' 8511 106
-b'test_on_fps_update' 8511 108
-b'test_on_fps_update' 8511 106
-b'test_on_fps_update' 8511 103
-b'test_on_fps_update' 8511 103
-b'test_on_fps_update' 8511 104
-b'test_on_fps_update' 8511 109
-b'test_on_fps_update' 8511 109
+42
+88
+92
+86
+78
+95
+94
+83
+72
+72
+72
+72
+72
+72
+72
+72
+72
+72
+69
+70
+70
+72
+73
+73
+73
+72
+73
+72
+71
