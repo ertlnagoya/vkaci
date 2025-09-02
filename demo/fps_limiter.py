@@ -81,6 +81,8 @@ def main(args) -> None:
     frame_time_us = cast(HashTable, bpf.get_table("frame_time_us"))
     frame_time_us[ct.c_uint(0)] = ct.c_uint(1000*1000//fps_limit)
 
+    shm = shared_memory.SharedMemory(name="limited_fps_shm")
+
     # process event
     def print_event(cpu, data, size):
         global fps_limit
@@ -90,12 +92,10 @@ def main(args) -> None:
             f.write(f"{event.fps}\n")
     def fps_limit_update():
         while (True):
-            shm = shared_memory.SharedMemory(name="limited_fps_shm")
             fps_limit = struct.unpack("i", shm.buf[:4])[0]
             if fps_limit != -1:
                 shm.buf[:4] = struct.pack("i", -1)
                 frame_time_us[ct.c_uint(0)] = ct.c_uint(1000*1000//fps_limit)
-                shm.close()
             time.sleep(0.2)
 
     t = threading.Thread(target=fps_limit_update, daemon=True)

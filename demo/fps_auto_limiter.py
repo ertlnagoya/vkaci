@@ -26,6 +26,20 @@ env = os.environ.copy()
 env["DISPLAY"] = ":0"
 env["LD_PRELOAD"] = os.path.join(os.getcwd(), "../build/intercept.so")
 
+def additional_mark():
+    time.sleep(10)
+    vkmark3 = subprocess.Popen(
+        ["vkmark", "-b", "clear:duration=30", "-s", "7680x4320"],
+        env=env
+    )
+    APP_PID3 = vkmark3.pid
+    print(f"vkmark3 is started with pid [{APP_PID3}].")
+    time.sleep(10)
+    os.kill(APP_PID3, signal.SIGKILL)
+
+# thread = threading.Thread(target=additional_mark, daemon=True)
+# thread.start()
+
 # --- vkmark1(重・低優先度) 開始 ---
 vkmark1 = subprocess.Popen(
     ["vkmark", "-b", "effect2d:duration=30", "-s", "7680x4320"],
@@ -56,46 +70,37 @@ fps_monitor = subprocess.Popen(
 )
 P_PID2 = fps_monitor.pid
 
-def additional_mark():
-    time.sleep(10)
-    vkmark3 = subprocess.Popen(
-        ["vkmark", "-b", "clear:duration=30", "-s", "7680x4320"],
-        env=env
-    )
-    APP_PID3 = vkmark3.pid
-    print(f"vkmark3 is started with pid [{APP_PID3}].")
-    time.sleep(10)
-    os.kill(APP_PID3, signal.SIGKILL)
+# 目標FPSとの差が大きい時のみP制御、それ以外は定数で変化(低優先度プロセスのFPSを上げすぎない方向性)
+class PController:
+    def __init__(self, target=60, kp_up=0.1, kp_down=0.5, up_limit=10, down_limit=-20):
+        self.target = target
+        self.kp_up = kp_up
+        self.kp_down = kp_down
+        self.up_limit = up_limit
+        self.down_limit = down_limit
 
-# thread = threading.Thread(target=additional_mark, daemon=True)
-# thread.start()
+    def update(self, monitored_value) -> int:
+        error = monitored_value - self.target
+        if error >= 0:
+            return (int)(min(self.kp_up * error, self.up_limit))
+        else:
+            return (int)(min(-5, max(self.kp_down * error, self.down_limit)))
 
 t = 0
 target_fps = 60
 limited_fps = 60
+controller = PController()
 
 while t < 30:
     t += 0.2
     
     value = struct.unpack("i", shm.buf[:4])[0]
     if value != -1:
-        if value < target_fps:
-            # os.kill(P_PID1, signal.SIGKILL)
-            limited_fps -= 5
-            # fps_limiter = subprocess.Popen(
-            #     ["sudo", "./fps_limiter.py", str(APP_PID1), (str)(limited_fps)]
-            # )
-            # P_PID1 = fps_limiter.pid
+        if value < target_fps or target_fps + 30 < value:
+            limited_fps += controller.update(value)
             shm2.buf[:4] = struct.pack("i", limited_fps)
             shm.buf[:4] = struct.pack("i", -1)
-        elif value > target_fps + 30:
-            # os.kill(P_PID1, signal.SIGKILL)
-            limited_fps += 5
-            # fps_limiter = subprocess.Popen(
-            #     ["sudo", "./fps_limiter.py", str(APP_PID1), (str)(limited_fps)]
-            # )
-            # P_PID1 = fps_limiter.pid
-            shm2.buf[:4] = struct.pack("i", limited_fps)
+        else:
             shm.buf[:4] = struct.pack("i", -1)
 
     time.sleep(0.2)

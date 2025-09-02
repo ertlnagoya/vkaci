@@ -60,15 +60,15 @@ def main(args) -> None:
 
     bpf = create_bpf_for_monitoring()
 
+    shm = shared_memory.SharedMemory(name="fps_shm")
+
     # process event
     def print_event(cpu, data, size):
         event = bpf['log_entries'].event(data)
         # print(event.message, event.pid, event.fps)
         with open("monitor.txt", "a", encoding="utf-8") as f:
             f.write(f"{event.fps}\n")
-        shm = shared_memory.SharedMemory(name="fps_shm")
         shm.buf[:4] = struct.pack("i", event.fps)
-        shm.close()
 
     # loop with callback to print_event
     bpf["log_entries"].open_perf_buffer(print_event)
