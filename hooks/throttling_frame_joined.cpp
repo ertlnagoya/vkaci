@@ -36,6 +36,7 @@ static const auto TARGET_FPS = getEnvInt("TARGET_FPS", 30);
 static const auto frame_time_target = std::chrono::microseconds(1000 * 1000 / TARGET_FPS);
 #endif
 static uint32_t frame_time_target_us = 0; // 1000U * 1000U / 60U;
+static uint32_t fps_get_interval = 10;
 static auto pred_frame_start = std::chrono::high_resolution_clock::now();
 
 static auto fps_counter_begin_time = std::chrono::high_resolution_clock::now();
@@ -44,6 +45,9 @@ static auto fps_counter_begin_frame = 0U;
 void onSwapCompleted()
 {
     static auto frame_no = 0U;
+    static uint32_t fps_get_count = 0;
+    static uint32_t fps_counter_duration_sum = 0;
+    static uint32_t fps_counter_duration_lastsum = 0;
 
     if (frame_no == 0) {
         fps_counter_begin_time = std::chrono::high_resolution_clock::now();
@@ -68,11 +72,24 @@ void onSwapCompleted()
 #endif
 
     auto fps_counter_duration = std::chrono::duration_cast<std::chrono::microseconds>(pred_frame_start - fps_counter_begin_time);
-    if (fps_counter_duration.count() > 1000000U) {
-        uint32_t fps = (frame_no - fps_counter_begin_frame) * 1000000U / fps_counter_duration.count();
-        // std::cerr << "FPS: " << fps << std::endl;
+    // 0.1秒ごとに目標FPS更新を受付、一定回数ごとに今のFPSを送信
+    if (fps_counter_duration.count() + fps_counter_duration_sum >= 100000U * (fps_get_count + 1)) {
+        DTRACE_PROBE1(vkaci, on_fps_update, &frame_time_target_us);
+        fps_get_count++;
         fps_counter_begin_time = pred_frame_start;
-        fps_counter_begin_frame = frame_no;
-        DTRACE_PROBE2(vkaci, on_fps_update, fps, &frame_time_target_us);
+        fps_counter_duration_sum += fps_counter_duration.count();
+        if (fps_get_count % fps_get_interval == 0){
+            // 前回計測時のフレームからの経過数 / 経過時間
+            uint32_t fps = (frame_no - fps_counter_begin_frame) * 1000000U / (fps_counter_duration_sum - fps_counter_duration_lastsum);
+            // 100秒ごとにリセット(誤差の蓄積を抑えるため)
+            if (fps_get_count >= 1000){
+                frame_no = 0;
+                fps_get_count = 0;
+                fps_counter_duration_sum = 0;
+            }
+            fps_counter_begin_frame = frame_no;
+            fps_counter_duration_lastsum = fps_counter_duration_sum;
+            DTRACE_PROBE2(vkaci, on_fps_get, fps, &fps_get_interval);
+        }
     }
 }

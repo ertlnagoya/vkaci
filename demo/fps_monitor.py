@@ -10,7 +10,8 @@ binary_to_probes_dict = {}
 probe_to_binary_dict = {}
 fps_limit = 30
 pid_app_high = None
-pid_app_low = None
+
+fps_get_interval = 10
 
 def add_monitored_process(pid: int):
     path = str(pid)
@@ -21,6 +22,8 @@ def add_monitored_process(pid: int):
 def create_bpf_for_monitoring():
     usdt_contexts = []
     bpf_text = f"""
+        #define FPS_GET_INTERVAL ({fps_get_interval}U)
+
         struct log_entry {{
             u32  pid;
             u32  fps;
@@ -28,10 +31,17 @@ def create_bpf_for_monitoring():
         }};
         BPF_PERF_OUTPUT(log_entries);
 
-        int test_on_fps_update(struct pt_regs *ctx) {{
+        int test_on_fps_get(struct pt_regs *ctx) {{
             uint32_t fps = 0;
+            void *p_fps_get_interval;
+            uint32_t fps_get_interval = FPS_GET_INTERVAL;
+
             bpf_usdt_readarg(1, ctx, &fps);
-            struct log_entry entry = {{ .message = "test_on_fps_update", .pid = bpf_get_current_pid_tgid() }};
+            bpf_usdt_readarg(2, ctx, &p_fps_get_interval);
+
+            bpf_probe_write_user(p_fps_get_interval, &fps_get_interval, sizeof(fps_get_interval));
+            
+            struct log_entry entry = {{ .message = "on_fps_get", .pid = bpf_get_current_pid_tgid() }};
             entry.fps = fps;
             log_entries.perf_submit(ctx, &entry, sizeof(entry));
             return 0;
@@ -39,21 +49,16 @@ def create_bpf_for_monitoring():
     """
 
     usdt = binary_to_usdt_dict[str(pid_app_high)]
-    usdt.enable_probe(probe='vkaci:on_fps_update', fn_name='test_on_fps_update')
+    usdt.enable_probe(probe='vkaci:on_fps_get', fn_name='test_on_fps_get')
     usdt_contexts.append(usdt)
 
-    #usdt = binary_to_usdt_dict[str(pid_app_low)]
-    #usdt.enable_probe(probe='vkaci:on_fps_update', fn_name='test_on_fps_update')
-    #usdt_contexts.append(usdt)
-    #print(usdt_contexts)
-
-    #print(bpf_text)
     return BPF(text=bpf_text, usdt_contexts=usdt_contexts)
 
 def main(args) -> None:
-    global fps_limit
-    global pid_app_high
+    global fps_limit, pid_app_high, fps_get_interval
+
     process_pid = args[0]
+    fps_get_interval = int(args[1])
 
     add_monitored_process(int(process_pid))
     pid_app_high = process_pid

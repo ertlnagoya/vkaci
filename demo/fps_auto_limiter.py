@@ -9,10 +9,13 @@ import struct
 import matplotlib.pyplot as plt
 import threading
 
+fps_get_interval = 10   # 0.1秒単位でFPS取得間隔を設定
+
 with open("monitor.txt", "w", encoding="utf-8") as f:
     f.write("")
 with open("limiter.txt", "w", encoding="utf-8") as f:
     f.write("")
+target_values = []
 
 # 優先度の高いプロセスから受け取るFPS
 shm = shared_memory.SharedMemory(create=True, size=4, name="fps_shm")
@@ -29,13 +32,11 @@ env["LD_PRELOAD"] = os.path.join(os.getcwd(), "../build/intercept.so")
 def additional_mark():
     time.sleep(10)
     vkmark3 = subprocess.Popen(
-        ["vkmark", "-b", "clear:duration=30", "-s", "7680x4320"],
+        ["vkmark", "-b", "clear:duration=10", "-s", "7680x4320"],
         env=env
     )
     APP_PID3 = vkmark3.pid
     print(f"vkmark3 is started with pid [{APP_PID3}].")
-    time.sleep(10)
-    os.kill(APP_PID3, signal.SIGKILL)
 
 # thread = threading.Thread(target=additional_mark, daemon=True)
 # thread.start()
@@ -56,23 +57,23 @@ vkmark2 = subprocess.Popen(
 APP_PID2 = vkmark2.pid
 print(f"vkmark2 is started with pid [{APP_PID2}].")
 
-time.sleep(0.5)
+time.sleep(0.4)
 
 # fps-limiter 開始
 fps_limiter = subprocess.Popen(
-    ["sudo", "./fps_limiter.py", str(APP_PID1), "60"]
+    ["sudo", "./fps_limiter.py", str(APP_PID1), "60", str(fps_get_interval)]
 )
 P_PID1 = fps_limiter.pid
 
 # fps-monitor 開始
 fps_monitor = subprocess.Popen(
-    ["sudo", "./fps_monitor.py", str(APP_PID2)]
+    ["sudo", "./fps_monitor.py", str(APP_PID2), str(fps_get_interval)]
 )
 P_PID2 = fps_monitor.pid
 
 # 目標FPSとの差が大きい時のみP制御、それ以外は定数で変化(低優先度プロセスのFPSを上げすぎない方向性)
 class PController:
-    def __init__(self, target=60, kp_up=0.1, kp_down=0.5, up_limit=10, down_limit=-20):
+    def __init__(self, target=60, kp_up=0.2, kp_down=0.5, up_limit=10, down_limit=-20):
         self.target = target
         self.kp_up = kp_up
         self.kp_down = kp_down
@@ -91,19 +92,19 @@ target_fps = 60
 limited_fps = 60
 controller = PController()
 
-while t < 30:
-    t += 0.2
+while t <= 29:
+    time.sleep(0.1)
+    t += 0.1
     
     value = struct.unpack("i", shm.buf[:4])[0]
     if value != -1:
-        if value < target_fps or target_fps + 30 < value:
+        if value < target_fps or target_fps + 20 < value:
             limited_fps += controller.update(value)
             shm2.buf[:4] = struct.pack("i", limited_fps)
             shm.buf[:4] = struct.pack("i", -1)
         else:
             shm.buf[:4] = struct.pack("i", -1)
-
-    time.sleep(0.2)
+        target_values.append(limited_fps)
 
 # fps-limiter, fps-monitor 停止
 os.kill(P_PID1, signal.SIGKILL)
@@ -117,20 +118,24 @@ def read_integers_from_file(filename):
     with open(filename, "r") as f:
         return [int(line.strip()) for line in f if line.strip()]
 
-def plot_graph(monitor_file, limiter_file, output_file="fps_graph.png"):
+def plot_graph():
     # ファイルからデータを読み込む
-    monitor_values = read_integers_from_file(monitor_file)
-    limiter_values = read_integers_from_file(limiter_file)
+    monitor_values = read_integers_from_file("monitor.txt")
+    limiter_values = read_integers_from_file("limiter.txt")
 
-    # 行数(横軸)を作成
-    x = list(range(1, len(monitor_values) + 1))
+    # 要素数を揃える
+    col = min(len(monitor_values), len(limiter_values))
+
+    # 横軸を作成
+    x = [1 + (fps_get_interval/10) * i for i in range(0, col)]
 
     # グラフ描画
     plt.figure(figsize=(10, 6))
-    plt.plot(x, monitor_values, label="Monitor(high priority)", marker="o", color="orange")
-    plt.plot(x, limiter_values, label="Limiter(low priority)", marker="x", color="blue")
+    plt.plot(x, target_values[:col], label="Target(Limiter follow this)", marker="x", color="gray")
+    plt.plot(x, monitor_values[:col], label="Monitor(high priority)", marker="o", color="orange")
+    plt.plot(x, limiter_values[:col], label="Limiter(low priority)", marker="x", color="blue")
 
-    plt.axhspan(target_fps, target_fps+30, facecolor="yellow", alpha=0.2)
+    plt.axhspan(target_fps, target_fps+20, facecolor="yellow", alpha=0.2)
 
     # グラフの装飾
     plt.xlabel("Time(s)")
@@ -145,9 +150,9 @@ def plot_graph(monitor_file, limiter_file, output_file="fps_graph.png"):
     plt.ylim(top=120)
 
     # PNGファイルとして保存
-    plt.savefig(output_file, dpi=300, bbox_inches="tight")
+    plt.savefig("fps_graph.png", dpi=300, bbox_inches="tight")
 
     # グラフ表示
     plt.show()
 
-plot_graph("monitor.txt", "limiter.txt")
+plot_graph()

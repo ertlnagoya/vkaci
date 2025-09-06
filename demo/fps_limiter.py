@@ -14,8 +14,9 @@ binary_to_usdt_dict = {}
 binary_to_probes_dict = {}
 probe_to_binary_dict = {}
 fps_limit = 30
-pid_app_high = None
 pid_app_low = None
+
+fps_get_interval = 10
 
 def add_monitored_process(pid: int):
     path = str(pid)
@@ -26,6 +27,7 @@ def add_monitored_process(pid: int):
 def create_bpf_for_monitoring():
     usdt_contexts = []
     bpf_text = f"""
+        #define FPS_GET_INTERVAL ({fps_get_interval}U)
         BPF_HASH(frame_time_us, u32, u32);
 
         struct log_entry {{
@@ -35,12 +37,10 @@ def create_bpf_for_monitoring():
         }};
         BPF_PERF_OUTPUT(log_entries);
 
-        int test_on_fps_update_limiter(struct pt_regs *ctx) {{
-            uint32_t fps;
+        int test_on_fps_update(struct pt_regs *ctx) {{
             void *p_frame_tims_us;
 
-            bpf_usdt_readarg(1, ctx, &fps);
-            bpf_usdt_readarg(2, ctx, &p_frame_tims_us);
+            bpf_usdt_readarg(1, ctx, &p_frame_tims_us);
 
             u32 key = 0;
             u32 *frame_time_ptr = frame_time_us.lookup(&key);
@@ -48,7 +48,20 @@ def create_bpf_for_monitoring():
                 bpf_probe_write_user(p_frame_tims_us, frame_time_ptr, sizeof(*frame_time_ptr));
             }}
 
-            struct log_entry entry = {{ .message = "test_on_fps_update_limiter", .pid = bpf_get_current_pid_tgid() }};
+            return 0;
+        }}
+
+        int test_on_fps_get(struct pt_regs *ctx) {{
+            uint32_t fps = 0;
+            void *p_fps_get_interval;
+            uint32_t fps_get_interval = FPS_GET_INTERVAL;
+
+            bpf_usdt_readarg(1, ctx, &fps);
+            bpf_usdt_readarg(2, ctx, &p_fps_get_interval);
+
+            bpf_probe_write_user(p_fps_get_interval, &fps_get_interval, sizeof(fps_get_interval));
+            
+            struct log_entry entry = {{ .message = "on_fps_get", .pid = bpf_get_current_pid_tgid() }};
             entry.fps = fps;
             log_entries.perf_submit(ctx, &entry, sizeof(entry));
             return 0;
@@ -56,26 +69,22 @@ def create_bpf_for_monitoring():
 
     """
 
-    usdt = binary_to_usdt_dict[str(pid_app_high)]
-    usdt.enable_probe(probe='vkaci:on_fps_update', fn_name='test_on_fps_update_limiter')
+    usdt = binary_to_usdt_dict[str(pid_app_low)]
+    usdt.enable_probe(probe='vkaci:on_fps_update', fn_name='test_on_fps_update')
+    usdt.enable_probe(probe='vkaci:on_fps_get', fn_name='test_on_fps_get')
     usdt_contexts.append(usdt)
 
-    #usdt = binary_to_usdt_dict[str(pid_app_low)]
-    #usdt.enable_probe(probe='glaci:on_fps_update', fn_name='test_on_fps_update')
-    #usdt_contexts.append(usdt)
-    #print(usdt_contexts)
-
-    #print(bpf_text)
     return BPF(text=bpf_text, usdt_contexts=usdt_contexts)
 
 def main(args) -> None:
-    global fps_limit, pid_app_high
+    global fps_limit, pid_app_low, fps_get_interval
 
     process_pid = args[0]
     fps_limit = int(args[1])
+    fps_get_interval = int(args[2])
 
     add_monitored_process(int(process_pid))
-    pid_app_high = process_pid
+    pid_app_low = process_pid
 
     bpf = create_bpf_for_monitoring()
     frame_time_us = cast(HashTable, bpf.get_table("frame_time_us"))
@@ -96,7 +105,7 @@ def main(args) -> None:
             if fps_limit != -1:
                 shm.buf[:4] = struct.pack("i", -1)
                 frame_time_us[ct.c_uint(0)] = ct.c_uint(1000*1000//fps_limit)
-            time.sleep(0.2)
+            time.sleep(0.1)
 
     t = threading.Thread(target=fps_limit_update, daemon=True)
     t.start()
