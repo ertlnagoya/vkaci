@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+
+# 低優先度プロセスのFPSを下げることで高優先度プロセスのFPSを上げるデモ
+
 import subprocess
 import os
 import time
@@ -26,8 +29,9 @@ shm2.buf[:4] = struct.pack("i", -1)
 
 # 共通の環境変数設定
 env = os.environ.copy()
-env["DISPLAY"] = ":0"
-env["LD_PRELOAD"] = os.path.join(os.getcwd(), "../build/intercept.so")
+# env["DISPLAY"] = ":0"
+# env["LD_PRELOAD"] = os.path.join(os.getcwd(), "../build/intercept.so")
+env["VK_INSTANCE_LAYERS"] = "VK_LAYER_VKACI_FPS"
 
 def additional_mark():
     time.sleep(10)
@@ -44,18 +48,22 @@ def additional_mark():
 # --- vkmark1(重・低優先度) 開始 ---
 vkmark1 = subprocess.Popen(
     ["vkmark", "-b", "effect2d:duration=30", "-s", "7680x4320"],
+    # ["vkcube"],
+    # ["./GravityMark.x64", "-vk", "-a", "1000", "-width", "720", "-height", "480", "-benchmark", "1"],
+    # cwd="../../GravityMark/bin",
     env=env
 )
 APP_PID1 = vkmark1.pid
-print(f"vkmark1 is started with pid [{APP_PID1}].")
 
 # --- vkmark2(軽・高優先度) 開始 ---
 vkmark2 = subprocess.Popen(
-    ["vkmark", "-b", "desktop:duration=30", "-s", "7680x4320"],
+    # ["vkmark", "-b", "effect2d:duration=30", "-s", "7680x4320"],
+    # ["vkmark", "-b", "desktop:duration=30", "-s", "7680x4320"],
+    ["./GravityMark.x64", "-vk", "-a", "1000", "-width", "720", "-height", "480", "-benchmark", "1"],
+    cwd="../../GravityMark/bin",
     env=env
 )
 APP_PID2 = vkmark2.pid
-print(f"vkmark2 is started with pid [{APP_PID2}].")
 
 time.sleep(0.4)
 
@@ -109,6 +117,8 @@ while t <= 29:
 # fps-limiter, fps-monitor 停止
 os.kill(P_PID1, signal.SIGKILL)
 os.kill(P_PID2, signal.SIGKILL)
+os.kill(APP_PID1, signal.SIGKILL)
+os.kill(APP_PID2, signal.SIGKILL)
 shm.unlink()
 shm2.unlink()
 

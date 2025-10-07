@@ -106,7 +106,7 @@ class Hooks:
         if not is_target:
             return None
 
-        return func.define("\n\n".join(befores), "\n\n".join(reversed(afters)))
+        return func.define("".join(befores), "".join(reversed(afters)))
 
 
 def header() -> str:
@@ -189,7 +189,8 @@ def define_get_proc_addr_func(get_proc_func: Func, funcs: list[Func]):
             'extern "C" PUBLIC',
             f"{get_proc_func.proto}({', '.join([p.content for p in get_proc_func.params])})",
             "{",
-            f'    printf("{get_proc_func.name}_entry\\n");',
+            # f'    printf("{get_proc_func.name}_entry\\n");',
+            f'    printf("{get_proc_func.name}(%s)\\n", pName);',
             f"    auto procPtr = {get_proc_func.to_original_c_call()};",
         ]
     )
@@ -207,7 +208,7 @@ def define_get_proc_addr_func(get_proc_func: Func, funcs: list[Func]):
 
     res.extend(
         [
-            f'    printf("{get_proc_func.name}_exit\\n");',
+            # f'    printf("{get_proc_func.name}_exit\\n");',
             "    return procPtr;",
             "}",
             "",

@@ -8,7 +8,8 @@ def _trace(f: func.Func) -> str:
 def _on_Swap_called(f: func.Func) -> func.Hook:
     return func.Hook(
         is_target=f.name == "vkQueuePresentKHR",
-        after_run="onSwapCompleted();",
+        after_run="""
+    onSwapCompleted();""",
     )
 
 trace_hooks = func.Hooks(
@@ -31,12 +32,12 @@ def _dump_time(f: func.Func) -> str:
 def _begin_measure(f: func.Func) -> str:
     return (
         f'DTRACE_PROBE(vkapi, {f.name}_entry);'
-        #f'printf("{f.name}_entry\\n");'
+        # f'printf("{f.name}_entry\\n");'
     )
 
 def _end_measure(f: func.Func) -> str:
     return (
-        #f'printf("{f.name}_exit\\n");'
+        # f'printf("{f.name}_exit\\n");'
         f'DTRACE_PROBE(vkapi, {f.name}_exit);'
     )
 

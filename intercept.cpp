@@ -1297,13 +1297,10 @@ void vkCmdExecuteCommands(VkCommandBuffer commandBuffer, uint32_t commandBufferC
 
 extern "C" PUBLIC
 VkResult vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo) {
-    
-
-DTRACE_PROBE(vkapi, vkQueuePresentKHR_entry);
+    DTRACE_PROBE(vkapi, vkQueuePresentKHR_entry);
     auto _result = (*original_vkQueuePresentKHR)(queue, pPresentInfo);
     DTRACE_PROBE(vkapi, vkQueuePresentKHR_exit);
-
-onSwapCompleted();
+    onSwapCompleted();
     return _result;
 }
 
