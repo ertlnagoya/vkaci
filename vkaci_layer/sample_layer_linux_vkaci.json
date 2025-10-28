@@ -11,11 +11,8 @@
       "vkGetInstanceProcAddr": "SampleLayer_GetInstanceProcAddr",
       "vkGetDeviceProcAddr": "SampleLayer_GetDeviceProcAddr"
     },
-    "enable_environment": {
-      "ENABLE_SAMPLE_LAYER": "1"
-    },
     "disable_environment": {
-      "DISABLE_SAMPLE_LAYER": "1"
+      "DISABLE_VKACI_LAYER": "1"
     }
   }
 }

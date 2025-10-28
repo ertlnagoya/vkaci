@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
-# 高優先度プロセスにもlimiterを適用し、余裕があれば低優先度プロセスのFPSも一定以上にするデモ(最も単純なパターンとしてプロセス2個)
+# 外部で起動された、暗黙レイヤー適用済みVulkanプロセスのIDを受け取る想定のデモ
 
 import subprocess
 import os
 import time
 import signal
+import sys
 
 from multiprocessing import shared_memory
 import struct
@@ -14,7 +15,9 @@ import threading
 
 fps_get_interval = 10   # 0.1秒単位でFPS取得間隔を設定
 benchmark_count = 2     # ベンチマークの個数
-target_fpses = [(60, 80), (30, 60)]
+pid1 = sys.argv[1]
+pid2 = sys.argv[2]
+target_fpses = [(60, 120), (30, 60)]
 
 for i in range(benchmark_count):
     with open("benchmark_" + str(i) + ".txt", "w", encoding="utf-8") as f:
@@ -24,53 +27,36 @@ for i in range(benchmark_count):
 shms_get:list[shared_memory.SharedMemory] = []
 shms_send:list[shared_memory.SharedMemory] = []
 for i in range(benchmark_count):
-    shms_get.append(shared_memory.SharedMemory(create=True, size=4, name="monitored_fps_" + str(i)))
+    try:
+        shm_g = shared_memory.SharedMemory(create=True, size=4, name="monitored_fps_" + str(i))
+        shms_get.append(shm_g)
+    except FileExistsError:
+        shm_g = shared_memory.SharedMemory(name="monitored_fps_" + str(i))
+        shms_get.append(shm_g)
     shms_get[-1].buf[:4] = struct.pack("i", -1)
-    shms_send.append(shared_memory.SharedMemory(create=True, size=4, name="limit_fps_" + str(i)))
+    try:
+        shm_s = shared_memory.SharedMemory(create=True, size=4, name="limit_fps_" + str(i))
+        shms_send.append(shm_s)
+    except FileExistsError:
+        shm_s = shared_memory.SharedMemory(name="limit_fps_" + str(i))
+        shms_send.append(shm_s)
     shms_send[-1].buf[:4] = struct.pack("i", -1)
-
-# 共通の環境変数設定
-env = os.environ.copy()
-# env["VK_INSTANCE_LAYERS"] = "VK_LAYER_VKACI_FPS"
 
 def additional_mark():
     time.sleep(10)
     subprocess.Popen(
-        ["vkmark", "-b", "clear:duration=10", "-s", "5760x3240"],
-        env=env
+        ["vkmark", "-b", "clear:duration=10", "-s", "5760x3240"]
     )
 
 # thread = threading.Thread(target=additional_mark, daemon=True)
 # thread.start()
 
-app_pids = []
+app_pids = [pid1, pid2]
 python_pids = []
-
-# --- benchmark0(目標60〜100以上) 開始 ---
-benchmark0 = subprocess.Popen(
-    ["vkmark", "-b", "effect2d:duration=30", "-s", "7680x4320"],
-    # ["vkmark", "-b", "desktop:duration=30", "-s", "7680x4320"],
-    # ["./GravityMark.x64", "-vk", "-a", "1000", "-width", "480", "-height", "270", "-benchmark", "1"],
-    # cwd="../../GravityMark/bin",
-    env=env
-)
-app_pids.append(benchmark0.pid)
-
-# --- benchmark1(目標30〜60) 開始 ---
-benchmark1 = subprocess.Popen(
-    # ["vkmark", "-b", "effect2d:duration=30", "-s", "7680x4320"],
-    # ["vkmark", "-b", "desktop:duration=30", "-s", "5760x3240"],
-    ["./GravityMark.x64", "-vk", "-a", "1000", "-width", "480", "-height", "270", "-benchmark", "1"],
-    cwd="../../GravityMark/bin",
-    env=env
-)
-app_pids.append(benchmark1.pid)
-
-time.sleep(0.4)
 
 for i in range(benchmark_count):
     p = subprocess.Popen(
-        ["sudo", "./fps_limiter.py", str(app_pids[i]), str(target_fpses[i][1]), str(fps_get_interval), str(i)]
+        ["sudo", "./fps_limiter.py", app_pids[i], str(target_fpses[i][1]), str(fps_get_interval), str(i)]
     )
     python_pids.append(p.pid)
 
@@ -91,8 +77,8 @@ class PController:
             return (int)(min(-5, max(self.kp_down * error, self.down_limit)))
 
 t = 0
-# 最優先プロセスのFPSは、SteamDeckの最大リフレッシュレートである90を初期設定とする
-current_target_fpses = [90, target_fpses[1][1]]
+# 最優先プロセスのFPSは、Switch2の最大リフレッシュレートである120を初期設定とする
+current_target_fpses = [120, target_fpses[1][1]]
 monitored_fpses = [[] for i in range(benchmark_count)]
 target_fps_logs = [[] for i in range(benchmark_count)]
 controller = PController()
@@ -121,17 +107,17 @@ while t <= 29:
     if fpses[0] < target_fpses[0][0]:
         current_target_fpses[1] += controller.update(fpses[0])
         shms_send[1].buf[:4] = struct.pack("i", current_target_fpses[1])
-    # 低優先度側が制限FPSに達しておらず(システム的に低優先)、高優先度側に余裕がある時
-    elif fpses[1] < current_target_fpses[1] - 5 and fpses[0] > (target_fpses[0][0] + target_fpses[0][1]) / 2:
-        current_target_fpses[0] -= 5
+    # 低優先度側が目標に達しておらず、高優先度側に余裕がある時
+    elif fpses[1] < target_fpses[1][0] - 1 and fpses[0] > target_fpses[0][0] + 10:
+        current_target_fpses[0] = min(fpses[0], current_target_fpses[0] - 5)
         shms_send[0].buf[:4] = struct.pack("i", current_target_fpses[0])
-    # 低優先度側に余裕があり、高優先度側の目標が120未満になっている時
-    elif fpses[1] > (target_fpses[1][0] + target_fpses[1][1]) / 2 and current_target_fpses[0] < 120:
+    # 低優先度側に余裕があり、高優先度側の制限値が120未満かつ実FPSが制限値に達している時
+    elif fpses[1] > (target_fpses[1][0] + target_fpses[1][1]) / 2 and current_target_fpses[0] < 120 and fpses[0] >= current_target_fpses[0] - 1:
         current_target_fpses[0] = min(120, current_target_fpses[0] + 5)
         shms_send[0].buf[:4] = struct.pack("i", current_target_fpses[0])
-    # 高優先度側に余裕があり、低優先度側が最大FPSに達していない時
-    elif fpses[0] > target_fpses[0][1] and current_target_fpses[1] < target_fpses[1][1]:
-        current_target_fpses[1] += controller.update(fpses[0])
+    # 高優先度側が目標上限に達しており、低優先度側の制限値が目標上限未満かつ実FPSが制限値に達している時
+    elif fpses[0] >= 119 and current_target_fpses[1] < target_fpses[1][1] and fpses[1] >= current_target_fpses[1] - 1:
+        current_target_fpses[1] = min(target_fpses[1][1], current_target_fpses[1] + controller.update(fpses[0]))
         shms_send[1].buf[:4] = struct.pack("i", current_target_fpses[1])
 
     target_fps_logs[0].append(current_target_fpses[0])
@@ -140,8 +126,7 @@ while t <= 29:
 
 # プロセス停止
 for i in range(benchmark_count):
-    os.kill(python_pids[i], signal.SIGKILL)
-    os.kill(app_pids[i], signal.SIGKILL)
+    os.kill(python_pids[i], signal.SIGTERM)
     shms_get[i].unlink()
     shms_send[i].unlink()
 
