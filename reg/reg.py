@@ -145,8 +145,7 @@ class Enums:
 
 @dataclass
 class Proto:
-    content: str
-    ptype: str | None
+    type_: str
     name: str
     group: str | None
     kind: str | None
@@ -154,9 +153,12 @@ class Proto:
 
     @staticmethod
     def from_xml(element: ET.Element) -> "Proto":
-        content = "".join(element.itertext())
-        ptype_element = element.find("ptype")
-        ptype = ptype_element.text if (ptype_element is not None) else None
+        type_element = element.find("type")
+        if type_element is None:
+            raise attr_not_found_error("Proto", "type")
+        type_ = type_element.text
+        if type_ is None:
+            raise ValueError("Type element in Proto must have text")
 
         name_element = element.find("name")
         if name_element is None:
@@ -165,15 +167,8 @@ class Proto:
         if name is None:
             raise ValueError("Name element in Proto must have text")
 
-        if ptype is None:
-            # For EGL, some functions have non-void return type but no ptype element.
-            if not content.startswith(f"void {name}"):
-                i = content.find(name)
-                ptype = content[:i].strip()
-
         return Proto(
-            content=content,
-            ptype=ptype,
+            type_=type_,
             name=name,
             group=element.get("group"),
             kind=element.get("kind"),
@@ -183,8 +178,7 @@ class Proto:
     @staticmethod
     def dummy() -> "Proto":     #aliasしか持たないcommandに返すためのダミー
         return Proto(
-            content="",
-            ptype= "",
+            type_= "",
             name="",
             group="",
             kind="",
@@ -195,7 +189,7 @@ class Proto:
 @dataclass
 class Param:
     content: str
-    ptype: str | None
+    type_: str
     name: str
     group: str | None
     kind: str | None
@@ -204,8 +198,12 @@ class Param:
 
     @staticmethod
     def from_xml(element: ET.Element) -> "Param":
-        ptype_element = element.find("ptype")
-        ptype = ptype_element.text if (ptype_element is not None) else None
+        type_element = element.find("type")
+        if type_element is None:
+            raise attr_not_found_error("Param", "type")
+        type_ = type_element.text
+        if type_ is None:
+            raise ValueError("Type element in Param must have text")
 
         name_element = element.find("name")
         if name_element is None:
@@ -216,7 +214,7 @@ class Param:
 
         return Param(
             content="".join(element.itertext()),
-            ptype=ptype,
+            type_=type_,
             name=name,
             group=element.get("group"),
             kind=element.get("kind"),
@@ -232,6 +230,7 @@ class Command:
     alias: str | None
     name: str
     vecequiv: str | None
+    APIgroup: str
 
     @staticmethod
     def from_xml(element: ET.Element) -> "Command":
@@ -249,12 +248,30 @@ class Command:
         if name is None:
             name = ""
 
+        # そのAPIがデバイスレベルかインスタンスレベルかの判定
+        APIgroup = ""
+        if proto.name == "vkGetInstanceProcAddr" or proto.name == "vkGetDeviceProcAddr":
+            APIgroup = "Get_Proc_Funcs"
+        elif proto.name.startswith("vkEnumerate") or proto.name == "vkCreateInstance" or proto.name == "vkCreateDevice":
+            APIgroup = "Instance"
+        elif proto.name == "vkGetExternalComputeQueueDataNV":
+            APIgroup = "Device"
+        elif len(params) > 0:
+            if params[0].type_ == "VkDevice" or params[0].type_ == "VkQueue" or params[0].type_ == "VkCommandBuffer":
+                APIgroup = "Device"
+            elif params[0].type_ == "VkInstance" or params[0].type_ == "VkPhysicalDevice":
+                APIgroup = "Instance"
+        
+        if APIgroup == "" and proto.name:
+            raise ValueError(f"APIgroup element in Command must be judged:{proto.name}")
+
         return Command(
             proto=proto,
             params=params,
             alias=element.get("alias"),
             name=name,
             vecequiv=element.get("vecequiv"),
+            APIgroup=APIgroup,
         )
 
 
@@ -277,6 +294,7 @@ class Commands:
                         command.proto.name = command.name
                         command.params = c.params
                         command.vecequiv = c.vecequiv
+                        command.APIgroup = c.APIgroup
                         break
         return Commands(
             namespace=element.get("namespace"),

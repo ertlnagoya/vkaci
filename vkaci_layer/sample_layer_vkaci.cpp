@@ -87,11 +87,11 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_CreateInstance(
   VkLayerInstanceDispatchTable dispatchTable;
   dispatchTable.GetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)gpa(*pInstance, "vkGetInstanceProcAddr");
   dispatchTable.DestroyInstance = (PFN_vkDestroyInstance)gpa(*pInstance, "vkDestroyInstance");
-  dispatchTable.EnumerateDeviceExtensionProperties = (PFN_vkEnumerateDeviceExtensionProperties)gpa(*pInstance, "vkEnumerateDeviceExtensionProperties");
+  // dispatchTable.EnumerateDeviceExtensionProperties = (PFN_vkEnumerateDeviceExtensionProperties)gpa(*pInstance, "vkEnumerateDeviceExtensionProperties");
 
   // store the table by key
   {
-    scoped_lock l(global_lock);
+    //scoped_lock l(global_lock);
     instance_dispatch[GetKey(*pInstance)] = dispatchTable;
   }
 
@@ -100,7 +100,7 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_CreateInstance(
 
 VK_LAYER_EXPORT void VKAPI_CALL SampleLayer_DestroyInstance(VkInstance instance, const VkAllocationCallbacks* pAllocator)
 {
-  scoped_lock l(global_lock);
+  //scoped_lock l(global_lock);
   instance_dispatch.erase(GetKey(instance));
 }
 
@@ -146,7 +146,7 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_CreateDevice(
   
   // store the table by key
   {
-    scoped_lock l(global_lock);
+    //scoped_lock l(global_lock);
     device_dispatch[GetKey(*pDevice)] = dispatchTable;
   }
 
@@ -155,7 +155,7 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_CreateDevice(
 
 VK_LAYER_EXPORT void VKAPI_CALL SampleLayer_DestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator)
 {
-  scoped_lock l(global_lock);
+  //scoped_lock l(global_lock);
   device_dispatch.erase(GetKey(device));
 }
 
@@ -164,7 +164,7 @@ VK_LAYER_EXPORT void VKAPI_CALL SampleLayer_DestroyDevice(VkDevice device, const
 
 VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR *pPresentInfo)
 {
-    scoped_lock l(global_lock);
+    //scoped_lock l(global_lock);
 
     // 前フレームを基準とするのではなく、目標間隔を足し合わせていくことで誤差の蓄積を抑える
     pred_frame_start += std::chrono::microseconds(frame_time_target_us);
@@ -264,57 +264,57 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_QueuePresentKHR(VkQueue queue, c
 ///////////////////////////////////////////////////////////////////////////////////////////
 // Enumeration function
 
-VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_EnumerateInstanceLayerProperties(uint32_t *pPropertyCount,
-                                                                       VkLayerProperties *pProperties)
-{
-  if(pPropertyCount) *pPropertyCount = 1;
+// VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_EnumerateInstanceLayerProperties(uint32_t *pPropertyCount,
+//                                                                        VkLayerProperties *pProperties)
+// {
+//   if(pPropertyCount) *pPropertyCount = 1;
 
-  if(pProperties)
-  {
-    strcpy(pProperties->layerName, "VK_LAYER_SAMPLE_SampleLayer");
-    strcpy(pProperties->description, "Sample layer - https://renderdoc.org/vulkan-layer-guide.html");
-    pProperties->implementationVersion = 1;
-    pProperties->specVersion = VK_API_VERSION_1_0;
-  }
+//   if(pProperties)
+//   {
+//     strcpy(pProperties->layerName, "VK_LAYER_SAMPLE_SampleLayer");
+//     strcpy(pProperties->description, "Sample layer - https://renderdoc.org/vulkan-layer-guide.html");
+//     pProperties->implementationVersion = 1;
+//     pProperties->specVersion = VK_API_VERSION_1_0;
+//   }
 
-  return VK_SUCCESS;
-}
+//   return VK_SUCCESS;
+// }
 
-VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_EnumerateDeviceLayerProperties(
-    VkPhysicalDevice physicalDevice, uint32_t *pPropertyCount, VkLayerProperties *pProperties)
-{
-  return SampleLayer_EnumerateInstanceLayerProperties(pPropertyCount, pProperties);
-}
+// VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_EnumerateDeviceLayerProperties(
+//     VkPhysicalDevice physicalDevice, uint32_t *pPropertyCount, VkLayerProperties *pProperties)
+// {
+//   return SampleLayer_EnumerateInstanceLayerProperties(pPropertyCount, pProperties);
+// }
 
-VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_EnumerateInstanceExtensionProperties(
-    const char *pLayerName, uint32_t *pPropertyCount, VkExtensionProperties *pProperties)
-{
-  if(pLayerName == NULL || strcmp(pLayerName, "VK_LAYER_SAMPLE_SampleLayer"))
-    return VK_ERROR_LAYER_NOT_PRESENT;
+// VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_EnumerateInstanceExtensionProperties(
+//     const char *pLayerName, uint32_t *pPropertyCount, VkExtensionProperties *pProperties)
+// {
+//   if(pLayerName == NULL || strcmp(pLayerName, "VK_LAYER_SAMPLE_SampleLayer"))
+//     return VK_ERROR_LAYER_NOT_PRESENT;
 
-  // don't expose any extensions
-  if(pPropertyCount) *pPropertyCount = 0;
-  return VK_SUCCESS;
-}
+//   // don't expose any extensions
+//   if(pPropertyCount) *pPropertyCount = 0;
+//   return VK_SUCCESS;
+// }
 
-VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_EnumerateDeviceExtensionProperties(
-                                     VkPhysicalDevice physicalDevice, const char *pLayerName,
-                                     uint32_t *pPropertyCount, VkExtensionProperties *pProperties)
-{
-  // pass through any queries that aren't to us
-  if(pLayerName == NULL || strcmp(pLayerName, "VK_LAYER_SAMPLE_SampleLayer"))
-  {
-    if(physicalDevice == VK_NULL_HANDLE)
-      return VK_SUCCESS;
+// VK_LAYER_EXPORT VkResult VKAPI_CALL SampleLayer_EnumerateDeviceExtensionProperties(
+//                                      VkPhysicalDevice physicalDevice, const char *pLayerName,
+//                                      uint32_t *pPropertyCount, VkExtensionProperties *pProperties)
+// {
+//   // pass through any queries that aren't to us
+//   if(pLayerName == NULL || strcmp(pLayerName, "VK_LAYER_SAMPLE_SampleLayer"))
+//   {
+//     if(physicalDevice == VK_NULL_HANDLE)
+//       return VK_SUCCESS;
 
-    scoped_lock l(global_lock);
-    return instance_dispatch[GetKey(physicalDevice)].EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, pPropertyCount, pProperties);
-  }
+//     //scoped_lock l(global_lock);
+//     return instance_dispatch[GetKey(physicalDevice)].EnumerateDeviceExtensionProperties(physicalDevice, pLayerName, pPropertyCount, pProperties);
+//   }
 
-  // don't expose any extensions
-  if(pPropertyCount) *pPropertyCount = 0;
-  return VK_SUCCESS;
-}
+//   // don't expose any extensions
+//   if(pPropertyCount) *pPropertyCount = 0;
+//   return VK_SUCCESS;
+// }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 // GetProcAddr functions, entry points of the layer
@@ -325,8 +325,8 @@ VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL SampleLayer_GetDeviceProcAddr(VkDe
 {
   // device chain functions we intercept
   GETPROCADDR(GetDeviceProcAddr);
-  GETPROCADDR(EnumerateDeviceLayerProperties);
-  GETPROCADDR(EnumerateDeviceExtensionProperties);
+  // GETPROCADDR(EnumerateDeviceLayerProperties);
+  // GETPROCADDR(EnumerateDeviceExtensionProperties);
   GETPROCADDR(CreateDevice);
   GETPROCADDR(DestroyDevice);
   GETPROCADDR(QueuePresentKHR);
@@ -336,7 +336,7 @@ VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL SampleLayer_GetDeviceProcAddr(VkDe
   // GETPROCADDR(EndCommandBuffer);
   
   {
-    scoped_lock l(global_lock);
+    //scoped_lock l(global_lock);
     return device_dispatch[GetKey(device)].GetDeviceProcAddr(device, pName);
   }
 }
@@ -345,15 +345,15 @@ VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL SampleLayer_GetInstanceProcAddr(Vk
 {
   // instance chain functions we intercept
   GETPROCADDR(GetInstanceProcAddr);
-  GETPROCADDR(EnumerateInstanceLayerProperties);
-  GETPROCADDR(EnumerateInstanceExtensionProperties);
+  // GETPROCADDR(EnumerateInstanceLayerProperties);
+  // GETPROCADDR(EnumerateInstanceExtensionProperties);
   GETPROCADDR(CreateInstance);
   GETPROCADDR(DestroyInstance);
   
   // device chain functions we intercept
   GETPROCADDR(GetDeviceProcAddr);
-  GETPROCADDR(EnumerateDeviceLayerProperties);
-  GETPROCADDR(EnumerateDeviceExtensionProperties);
+  // GETPROCADDR(EnumerateDeviceLayerProperties);
+  // GETPROCADDR(EnumerateDeviceExtensionProperties);
   GETPROCADDR(CreateDevice);
   GETPROCADDR(DestroyDevice);
   GETPROCADDR(QueuePresentKHR);
@@ -363,7 +363,7 @@ VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL SampleLayer_GetInstanceProcAddr(Vk
   // GETPROCADDR(EndCommandBuffer);
 
   {
-    scoped_lock l(global_lock);
+    //scoped_lock l(global_lock);
     return instance_dispatch[GetKey(instance)].GetInstanceProcAddr(instance, pName);
   }
 }

@@ -2,5 +2,6 @@
 
 mkdir -p build
 
-python3 main.py > intercept.cpp
-g++ -DGLIBC_VERSION=${GLIBC_VERSION:=GLIBC_2.34} -shared -fPIC -Iinclude -Ihooks -ldl intercept.cpp -o ./build/intercept.so -lvulkan
+python3 main.py > vkaci_layer.cpp
+g++ -shared -fPIC -Ihooks vkaci_layer.cpp -o ./build/libvkaci_layer_fps.so
+cp ./build/libvkaci_layer_fps.so $VULKAN_SDK/lib
