@@ -40,22 +40,23 @@ class Func:
         res = []
         res.append('extern "C" PUBLIC')
         res.append(f"VKAPI_ATTR {self.ret_type} VKAPI_CALL VKACI_{self.name[2:]}({', '.join([p.content for p in self.params])})" + " {")
+        res.append("  std::lock_guard<std::mutex> lg(global_lock);")
         if beforeRun:
-            res.append("    " + beforeRun)
+            res.append("  " + beforeRun)
         if self.ret_type != "void":
             if self.API_group == "Instance":
-                res.append(f"    {self.ret_type} _result = instance_dispatch[GetKey({self.params[0].name})].{self.name[2:]}({', '.join([p.name for p in self.params])});")
+                res.append(f"  {self.ret_type} _result = instance_dispatch[GetKey({self.params[0].name})].{self.name[2:]}({', '.join([p.name for p in self.params])});")
             else:
-                res.append(f"    {self.ret_type} _result = device_dispatch[GetKey({self.params[0].name})].{self.name[2:]}({', '.join([p.name for p in self.params])});")
+                res.append(f"  {self.ret_type} _result = device_dispatch[GetKey({self.params[0].name})].{self.name[2:]}({', '.join([p.name for p in self.params])});")
         else:
             if self.API_group == "Instance":
-                res.append(f"    instance_dispatch[GetKey({self.params[0].name})].{self.name[2:]}({', '.join([p.name for p in self.params])});")
+                res.append(f"  instance_dispatch[GetKey({self.params[0].name})].{self.name[2:]}({', '.join([p.name for p in self.params])});")
             else:
-                res.append(f"    device_dispatch[GetKey({self.params[0].name})].{self.name[2:]}({', '.join([p.name for p in self.params])});")
+                res.append(f"  device_dispatch[GetKey({self.params[0].name})].{self.name[2:]}({', '.join([p.name for p in self.params])});")
         if afterRun:
-            res.append("    " + afterRun)
+            res.append("  " + afterRun)
         if self.ret_type != "void":
-            res.append("    return _result;")
+            res.append("  return _result;")
         res.append("}")
         return "\n".join(res)
 
@@ -109,10 +110,13 @@ def header() -> str:
 #include <assert.h>
 #include <string.h>
 #include <map>
+#include <mutex>
 """
 
 def global_things() -> str:
-    return """template<typename DispatchableType>
+    return """std::mutex global_lock;
+
+template<typename DispatchableType>
 void *GetKey(DispatchableType inst)
 {
   return *(void **)inst;
@@ -191,6 +195,7 @@ def define_required_func(funcs: list[Func]):
             '\nextern "C" PUBLIC',
             "VKAPI_ATTR VkResult VKAPI_CALL VKACI_CreateInstance(const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkInstance* pInstance)",
             "{",
+            "  std::lock_guard<std::mutex> lg(global_lock);",
             "  VkLayerInstanceCreateInfo *layerCreateInfo = (VkLayerInstanceCreateInfo *)pCreateInfo->pNext;",
             "  while(layerCreateInfo && (layerCreateInfo->sType != VK_STRUCTURE_TYPE_LOADER_INSTANCE_CREATE_INFO || layerCreateInfo->function != VK_LAYER_LINK_INFO))",
             "  {",
@@ -231,6 +236,7 @@ def define_required_func(funcs: list[Func]):
             '\nextern "C" PUBLIC',
             "VKAPI_ATTR void VKAPI_CALL VKACI_DestroyInstance(VkInstance instance, const VkAllocationCallbacks* pAllocator)",
             "{",
+            "  std::lock_guard<std::mutex> lg(global_lock);",
             "  instance_dispatch.erase(GetKey(instance));",
             "}",
         ]
@@ -241,6 +247,7 @@ def define_required_func(funcs: list[Func]):
             '\nextern "C" PUBLIC',
             "VKAPI_ATTR VkResult VKAPI_CALL VKACI_CreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)",
             "{",
+            "  std::lock_guard<std::mutex> lg(global_lock);",
             "  VkLayerDeviceCreateInfo *layerCreateInfo = (VkLayerDeviceCreateInfo *)pCreateInfo->pNext;",
             "  while(layerCreateInfo && (layerCreateInfo->sType != VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO || layerCreateInfo->function != VK_LAYER_LINK_INFO))",
             "  {",
@@ -282,6 +289,7 @@ def define_required_func(funcs: list[Func]):
             '\nextern "C" PUBLIC',
             "VKAPI_ATTR void VKAPI_CALL VKACI_DestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator)",
             "{",
+            "  std::lock_guard<std::mutex> lg(global_lock);",
             "  device_dispatch.erase(GetKey(device));",
             "}",
         ]

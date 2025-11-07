@@ -83,7 +83,7 @@ monitored_fpses = [[] for i in range(benchmark_count)]
 target_fps_logs = [[] for i in range(benchmark_count)]
 controller = PController()
 
-while t <= 29:
+while t <= 29.5:
     time.sleep(0.1)
     t += 0.1
     
@@ -98,6 +98,7 @@ while t <= 29:
 
     if not all_updated:
         continue
+    # print(t)
 
     for i in range(benchmark_count):
         monitored_fpses[i].append(fpses[i])

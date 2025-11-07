@@ -112,6 +112,7 @@ def main(args) -> None:
     def cleanup(signum, frame):
         frame_time_us[ct.c_uint(0)] = ct.c_uint(0)
         time.sleep(1)
+        sys.exit(0)
     signal.signal(signal.SIGTERM, cleanup)
 
     t = threading.Thread(target=fps_limit_update, daemon=True)
