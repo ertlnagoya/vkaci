@@ -2,6 +2,9 @@ from reg import reg
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+EXTENTION_APIS = [
+    "vkQueuePresentKHR",
+]
 
 @dataclass
 class Func:
@@ -176,7 +179,7 @@ def no_filter_funcs(
     for extention in registry.extensions:
         for req in extention.require:
             required_cmds.update(
-                [elm.name for elm in req.elements if elm.name == "vkQueuePresentKHR"]
+                [elm.name for elm in req.elements if elm.name in EXTENTION_APIS]
             )
     target_cmds = required_cmds - removed_cmds
 

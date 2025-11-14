@@ -81,6 +81,7 @@ t = 0
 current_target_fpses = [120, target_fpses[1][1]]
 monitored_fpses = [[] for i in range(benchmark_count)]
 target_fps_logs = [[] for i in range(benchmark_count)]
+time_logs = []
 controller = PController()
 
 while t <= 29.5:
@@ -98,15 +99,15 @@ while t <= 29.5:
 
     if not all_updated:
         continue
-    # print(t)
+    time_logs.append(t)
 
     for i in range(benchmark_count):
         monitored_fpses[i].append(fpses[i])
         shms_get[i].buf[:4] = struct.pack("i", -1)
 
-    # 高優先度側が目標に達していない時
+    # 高優先度側が目標に達していない時(低優先度側がクラッシュしないよう最低10FPSは残す)
     if fpses[0] < target_fpses[0][0]:
-        current_target_fpses[1] += controller.update(fpses[0])
+        current_target_fpses[1] = max(10, current_target_fpses[1] + controller.update(fpses[0]))
         shms_send[1].buf[:4] = struct.pack("i", current_target_fpses[1])
     # 低優先度側が目標に達しておらず、高優先度側に余裕がある時
     elif fpses[1] < target_fpses[1][0] - 1 and fpses[0] > target_fpses[0][0] + 10:
@@ -138,18 +139,13 @@ def read_integers_from_file(filename):
         return [int(line.strip()) for line in f if line.strip()]
 
 def plot_graph():
-    col = len(monitored_fpses[0])
-
-    # 横軸を作成
-    x = [1 + (fps_get_interval/10) * i for i in range(col)]
-
     colors = ["orange", "blue"]
     shapes = ["o", "x"]
     # グラフ描画
     plt.figure(figsize=(10, 6))
     for i in range(benchmark_count):
-        plt.plot(x, target_fps_logs[i], label="benchmark_" + str(i) + "_target", marker=shapes[i], color="gray")
-        plt.plot(x, monitored_fpses[i], label="benchmark_" + str(i), marker=shapes[i], color=colors[i])
+        plt.plot(time_logs, target_fps_logs[i], label="benchmark_" + str(i) + "_target", marker=shapes[i], color="gray")
+        plt.plot(time_logs, monitored_fpses[i], label="benchmark_" + str(i), marker=shapes[i], color=colors[i])
         plt.axhspan(target_fpses[i][0], target_fpses[i][1], facecolor=colors[i], alpha=0.1)
 
     # グラフの装飾

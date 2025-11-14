@@ -1337,9 +1337,8 @@ VKAPI_ATTR void VKAPI_CALL VKACI_CmdExecuteCommands(VkCommandBuffer commandBuffe
 extern "C" PUBLIC
 VKAPI_ATTR VkResult VKAPI_CALL VKACI_QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo) {
   std::lock_guard<std::mutex> lg(global_lock);
-  
-    onSwapCompleted();
-    //printf("vkQueuePresentKHR_entry\n");
+  onSwapCompleted();
+  //printf("vkQueuePresentKHR_entry\n");
   VkResult _result = device_dispatch[GetKey(queue)].QueuePresentKHR(queue, pPresentInfo);
   //printf("vkQueuePresentKHR_exit\n");
   return _result;

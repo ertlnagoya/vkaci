@@ -4,9 +4,8 @@ import func
 def _on_Swap_called(f: func.Func) -> func.Hook:
     return func.Hook(
         is_target=f.name == "vkQueuePresentKHR",
-        before_run="""
-    onSwapCompleted();
-    """,
+        before_run="""onSwapCompleted();
+  """,
     )
 
 def entry(f: func.Func) -> str:
